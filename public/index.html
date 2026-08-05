@@ -1,58 +1,25 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Notes · Node.js core-module server</title>
-    <link rel="stylesheet" href="/styles.css" />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📝</text></svg>"
-    />
-  </head>
-  <body>
-    <header class="site-header">
-      <div>
-        <h1>Notes</h1>
-        <p class="tagline">
-          Served by <code>node:http</code> · stored with <code>node:fs</code> · zero dependencies
-        </p>
-      </div>
-      <div class="health" id="health" aria-live="polite">checking…</div>
-    </header>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Notes</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>My Notes</h1>
+  <p class="sub">A Node.js server with no Express</p>
 
-    <main>
-      <section class="panel">
-        <h2>New note</h2>
-        <form id="create-form" autocomplete="off">
-          <label>
-            Title
-            <input name="title" maxlength="120" required placeholder="Something you learned" />
-          </label>
-          <label>
-            Body
-            <textarea name="body" rows="4" maxlength="5000" placeholder="Details…"></textarea>
-          </label>
-          <label>
-            Tags <span class="hint">comma separated</span>
-            <input name="tags" placeholder="streams, fs" />
-          </label>
-          <button type="submit">Save note</button>
-        </form>
-        <p class="form-error" id="form-error" role="alert" hidden></p>
-      </section>
+  <form id="note-form">
+    <input type="text" id="title" placeholder="Title" required>
+    <textarea id="body" placeholder="Write something..." rows="3"></textarea>
+    <button type="submit">Add note</button>
+  </form>
 
-      <section class="panel">
-        <div class="list-header">
-          <h2>All notes <span class="count" id="count"></span></h2>
-          <input id="search" type="search" placeholder="Search title and body…" />
-        </div>
-        <div id="tag-bar" class="tag-bar"></div>
-        <ul id="notes" class="notes"></ul>
-        <p class="empty" id="empty" hidden>Nothing here yet.</p>
-      </section>
-    </main>
+  <div id="message"></div>
 
-    <script src="/app.js"></script>
-  </body>
+  <div id="notes">Loading...</div>
+
+  <script src="/app.js"></script>
+</body>
 </html>

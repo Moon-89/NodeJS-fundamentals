@@ -1,19 +1,7 @@
-# Dependencies (this project has none, but never commit them anyway)
 node_modules/
-
-# Generated at runtime
-logs/
-data/notes.json
-data/*.tmp
 *.log
-
-# OS / editor cruft
 .DS_Store
 Thumbs.db
-desktop.ini
 .vscode/
 .idea/
-
-# Env
 .env
-.env.local

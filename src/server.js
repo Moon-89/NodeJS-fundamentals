@@ -1,74 +1,187 @@
-'use strict';
+// A notes server using only Node's built-in modules - no Express.
+// Start it with: npm start
 
-const http = require('node:http');
-const path = require('node:path');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const EventEmitter = require('events');
 
-const createApp = require('./app');
-const Logger = require('./lib/logger');
+const notes = require('./notes');
 
-const ROOT = path.join(__dirname, '..');
-const PORT = Number(process.env.PORT ?? 3000);
-const HOST = process.env.HOST ?? '127.0.0.1';
+const PORT = 3000;
+const PUBLIC = path.join(__dirname, '..', 'public');
 
-const logger = new Logger({ file: path.join(ROOT, 'logs', 'access.log') });
+// Using EventEmitter for logging so the request handler doesn't have to
+// worry about how logging works - it just emits an event.
+const logger = new EventEmitter();
 
-const app = createApp({
-  dataFile: process.env.DATA_FILE ?? path.join(ROOT, 'data', 'notes.json'),
-  publicDir: path.join(ROOT, 'public'),
-  logger,
+logger.on('request', (method, url, status) => {
+  console.log(`${method} ${url} -> ${status}`);
 });
 
-// http.createServer returns an EventEmitter. Passing a function is shorthand
-// for server.on('request', fn) -- there is no framework in between.
-const server = http.createServer(app);
+// --- small helpers ---
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Try: PORT=3001 npm start`);
-    process.exit(1);
-  }
-  logger.emit('error', err);
-});
+function sendJson(res, status, data) {
+  const body = JSON.stringify(data, null, 2);
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(body);
+}
 
-server.listen(PORT, HOST, () => {
-  const { address, port } = server.address();
-  console.log(`\n  Notes server running on http://${address}:${port}`);
-  // Plain ASCII on purpose: the default Windows console codepage mangles
-  // anything fancier.
-  console.log(`  Node ${process.version} | pid ${process.pid}`);
-  console.log('  Press Ctrl+C to stop\n');
-});
-
-/**
- * Graceful shutdown: stop accepting new connections, let in-flight requests
- * finish, flush the log file, then exit. Killing the process outright can
- * truncate a response or a log write mid-flight.
- */
-let shuttingDown = false;
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`\n${signal} received, shutting down...`);
-
-    server.close(async () => {
-      await logger.close();
-      console.log('Closed cleanly.');
-      process.exit(0);
+// The request body arrives in chunks, so collect them and wait for 'end'.
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
     });
-    server.closeIdleConnections();
-
-    // Backstop: if something refuses to let go, leave anyway.
-    // unref() keeps this timer from holding the process open on its own.
-    setTimeout(() => {
-      console.error('Forcing exit after 5s.');
-      process.exit(1);
-    }, 5000).unref();
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
   });
 }
 
-process.on('unhandledRejection', (reason) => {
-  logger.emit('error', reason instanceof Error ? reason : new Error(String(reason)));
+const CONTENT_TYPES = {
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+};
+
+// Serve files from public/. Using createReadStream instead of readFile
+// because a stream sends the file in chunks instead of loading the whole
+// thing into memory first.
+function serveFile(url, res, done) {
+  const filePath = path.join(PUBLIC, url === '/' ? 'index.html' : url);
+
+  // Don't let someone ask for ../../secret.txt
+  if (!filePath.startsWith(PUBLIC)) {
+    sendJson(res, 403, { error: 'Forbidden' });
+    done(403);
+    return;
+  }
+
+  fs.stat(filePath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      sendJson(res, 404, { error: 'Not found' });
+      done(404);
+      return;
+    }
+
+    const type = CONTENT_TYPES[path.extname(filePath)] || 'text/plain';
+    res.writeHead(200, { 'Content-Type': type });
+
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    stream.on('error', () => res.end());
+
+    done(200);
+  });
+}
+
+// --- the server ---
+
+const server = http.createServer(async (req, res) => {
+  // req.url includes the query string, and I only want the path part
+  const url = req.url.split('?')[0];
+  const method = req.method;
+
+  // logging happens here so I don't have to repeat it in every branch
+  const log = (status) => logger.emit('request', method, url, status);
+
+  try {
+    if (url === '/api/notes' && method === 'GET') {
+      const all = await notes.getAll();
+      sendJson(res, 200, all);
+      log(200);
+      return;
+    }
+
+    if (url === '/api/notes' && method === 'POST') {
+      const body = await readBody(req);
+      let data;
+
+      try {
+        data = JSON.parse(body);
+      } catch {
+        sendJson(res, 400, { error: 'Body must be valid JSON' });
+        log(400);
+        return;
+      }
+
+      if (!data.title || typeof data.title !== 'string') {
+        sendJson(res, 400, { error: 'title is required' });
+        log(400);
+        return;
+      }
+
+      const note = await notes.add(data.title, data.body);
+      sendJson(res, 201, note);
+      log(201);
+      return;
+    }
+
+    // /api/notes/:id - grab the id off the end of the url
+    if (url.startsWith('/api/notes/')) {
+      const id = url.split('/')[3];
+
+      if (method === 'GET') {
+        const note = await notes.getOne(id);
+        if (!note) {
+          sendJson(res, 404, { error: 'Note not found' });
+          log(404);
+          return;
+        }
+        sendJson(res, 200, note);
+        log(200);
+        return;
+      }
+
+      if (method === 'PUT') {
+        const body = await readBody(req);
+        let data;
+
+        try {
+          data = JSON.parse(body);
+        } catch {
+          sendJson(res, 400, { error: 'Body must be valid JSON' });
+          log(400);
+          return;
+        }
+
+        const note = await notes.update(id, data.title, data.body);
+        if (!note) {
+          sendJson(res, 404, { error: 'Note not found' });
+          log(404);
+          return;
+        }
+        sendJson(res, 200, note);
+        log(200);
+        return;
+      }
+
+      if (method === 'DELETE') {
+        const deleted = await notes.remove(id);
+        if (!deleted) {
+          sendJson(res, 404, { error: 'Note not found' });
+          log(404);
+          return;
+        }
+        sendJson(res, 200, { deleted: true });
+        log(200);
+        return;
+      }
+    }
+
+    // not an API route, so try to serve a file from public/
+    serveFile(url, res, log);
+  } catch (err) {
+    console.error('Something went wrong:', err.message);
+    sendJson(res, 500, { error: 'Server error' });
+    log(500);
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+  console.log('Press Ctrl+C to stop');
 });
 
 module.exports = server;
