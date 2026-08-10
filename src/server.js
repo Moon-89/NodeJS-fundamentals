@@ -8,7 +8,7 @@ const EventEmitter = require('events');
 
 const notes = require('./notes');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, '..', 'public');
 
 // Using EventEmitter for logging so the request handler doesn't have to
@@ -182,6 +182,16 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
   console.log('Press Ctrl+C to stop');
+});
+
+// handle common listen errors (eg. port already in use)
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} already in use — stop other process or set PORT env var to use a different port.`);
+    process.exit(1);
+  }
+  console.error('Server error:', err);
+  process.exit(1);
 });
 
 module.exports = server;
