@@ -10,11 +10,5 @@
     "title": "require caches modules",
     "body": "A module's code only runs the first time. After that require() gives back the same exports object.",
     "createdAt": "2026-08-02T11:30:00.000Z"
-  },
-  {
-    "id": "1754000000003",
-    "title": "Streams vs readFile",
-    "body": "readFile loads the whole file into memory. createReadStream sends it in chunks, so a big file doesn't blow up memory.",
-    "createdAt": "2026-08-03T14:15:00.000Z"
   }
 ]

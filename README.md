@@ -68,3 +68,13 @@ Short version of where each module shows up:
 - **fs** - `notes.js` reads and writes the JSON file with `fs.promises`
 - **streams** - `createReadStream().pipe(res)` for serving files
 - **events** - an `EventEmitter` for the request log
+
+## Deployment
+
+This project serves a static frontend from the `public/` folder. Two quick ways to get a live, reviewable site:
+
+- **GitHub Pages (auto)**: a GitHub Action is included at `.github/workflows/deploy-gh-pages.yml` that publishes the `public/` folder to GitHub Pages on push to `main` or `master`. After you push, check the Actions tab — once successful, enable Pages in the repo settings (or set Pages to use the `gh-pages` branch) and the site will be live.
+
+- **Vercel (one-click)**: import the repository at https://vercel.com/new and set the `Build & Output Settings` so the output directory is `public` (no build command required). Vercel will host the static site immediately.
+
+Notes for reviewers: the frontend now includes a demo/offline fallback. If the backend API (`/api/notes`) is not reachable on the deployed site, the app automatically switches to a demo mode that stores notes in the browser (`localStorage`) so the UI remains interactive.
