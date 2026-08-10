@@ -1,0 +1,8 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/notes", "destination": "/api/notes/index.js" },
+    { "source": "/api/notes/:id", "destination": "/api/notes/[id].js" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
+}
