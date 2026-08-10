@@ -78,19 +78,20 @@ This project serves a static frontend from the `public/` folder. Two quick ways 
 - **Vercel (one-click)**: import the repository at https://vercel.com/new and set the `Build & Output Settings` so the output directory is `public` (no build command required). Vercel will host the static site immediately.
 
 - **Vercel (frontend + backend)**: This repo now includes serverless API routes under `api/notes` that proxy to Supabase for persistence. To deploy a working full-stack site on Vercel:
+ - **Vercel (frontend + backend without extra accounts)**: If you don't want additional services, the server includes GitHub-backed serverless API routes under `api/notes` that read/write `data/notes.json` directly in this repository using the GitHub REST API.
 
-  1. Create a free Supabase project and create a table `notes` with columns:
-    - `id` (type `text` or `uuid`, primary key)
-    - `title` (text)
-    - `body` (text)
-    - `created_at` (timestamp)
+  To enable this on Vercel you only need:
 
-  2. Get your Supabase `URL` and `anon` key (or a service role key if you prefer) and add them as Vercel Environment Variables in your project settings:
-    - `SUPABASE_URL` set to your Supabase URL (e.g. `https://xyz.supabase.co`)
-    - `SUPABASE_KEY` set to your Supabase anon or service key
+  1. A GitHub Personal Access Token (PAT) with `repo` scope. Create one at https://github.com/settings/tokens and copy it.
+  2. In your Vercel project settings add an Environment Variable:
+    - `GH_PAT` = your GitHub PAT
 
-  3. Push to GitHub and import the repo into Vercel. Vercel will detect the `api/` folder and deploy serverless functions automatically. The frontend will use `/api/notes` and the serverless functions will persist notes to Supabase.
+  Vercel provides the repository owner and name via `VERCEL_GIT_REPO_OWNER` and `VERCEL_GIT_REPO_SLUG`; the functions will infer the repo automatically. If needed, you can also set `GITHUB_REPO` to `owner/repo`.
 
-  Note: If you prefer a quick reviewer demo without creating Supabase, you can keep the static-only deploy; the frontend will automatically switch to demo/localStorage mode when the backend is absent.
+  After adding `GH_PAT`, redeploy the project. The serverless API will be available at `/api/notes` and will persist changes by committing `data/notes.json` to this repository.
+
+  Notes and caveats:
+  - This method creates a git commit for each write. It is simple and requires no extra services, but it's not ideal for high write volumes.
+  - If you prefer a more robust backend (Postgres or Supabase), see the previous instructions in this README.
 
 Notes for reviewers: the frontend now includes a demo/offline fallback. If the backend API (`/api/notes`) is not reachable on the deployed site, the app automatically switches to a demo mode that stores notes in the browser (`localStorage`) so the UI remains interactive.
