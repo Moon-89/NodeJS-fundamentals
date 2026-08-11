@@ -1,6 +1,8 @@
 // Shared GitHub-file-storage helper for the serverless functions.
-// Files under api/ that start with "_" are not turned into routes by Vercel,
-// so this is a safe place for code both handlers need.
+//
+// This lives in src/ rather than api/ on purpose: Vercel turns *every* file
+// under api/ into an endpoint, and this module exports a bag of helpers, not
+// a request handler.
 //
 // Environment variables expected on Vercel:
 // - GH_PAT : GitHub personal access token with repo contents write access

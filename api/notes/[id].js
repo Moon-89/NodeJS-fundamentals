@@ -1,7 +1,7 @@
 // Vercel serverless function: read (GET), update (PUT) and delete (DELETE)
 // a single note by id. Storage is data/notes.json via the GitHub API.
 
-const gh = require('../_lib/github');
+const gh = require('../../src/github-store');
 const { validateNote, isValidId } = require('../../src/validate');
 
 module.exports = async (req, res) => {

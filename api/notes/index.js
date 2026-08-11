@@ -2,7 +2,7 @@
 // Storage is data/notes.json in this repo, read/written through the GitHub API.
 // See api/_lib/github.js for the required environment variables.
 
-const gh = require('../_lib/github');
+const gh = require('../../src/github-store');
 const { validateNote } = require('../../src/validate');
 
 module.exports = async (req, res) => {

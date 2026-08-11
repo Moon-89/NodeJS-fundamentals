@@ -9,6 +9,9 @@
     "test": "node --test",
     "demo": "node src/event-loop-demo.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "keywords": [
     "nodejs",
     "http",

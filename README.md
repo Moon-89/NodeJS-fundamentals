@@ -36,9 +36,9 @@ src/
   server.js             the HTTP server and routes
   notes.js              reading and writing data/notes.json
   validate.js           input rules, shared by the server and the API routes
+  github-store.js       GitHub-file storage, used by the Vercel routes
   event-loop-demo.js    prints callback order so you can see the loop
 api/
-  _lib/github.js        GitHub-file-storage helper for the serverless routes
   notes/index.js        GET/POST /api/notes on Vercel
   notes/[id].js         GET/PUT/DELETE /api/notes/:id on Vercel
 public/                 the web page (html, css, js)
