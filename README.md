@@ -4,6 +4,15 @@ A small notes app I built while going through the Node.js fundamentals videos.
 It uses only Node's built-in modules - `http`, `fs`, `path`, `events` and
 streams. No Express, no npm packages.
 
+## Live demo
+
+| Where | Link | What works there |
+| --- | --- | --- |
+| **Vercel (full app)** | https://node-js-fundamentals-ten.vercel.app | Frontend **and** the API. Notes are saved to `data/notes.json` in this repo. |
+| **GitHub Pages (frontend only)** | https://moon-89.github.io/NodeJS-fundamentals/ | The UI only — Pages can't run Node, so the app says so and stores notes in your browser. |
+
+Both are deployed automatically on every push to `main`.
+
 ## Running it
 
 ```
@@ -26,10 +35,16 @@ Needs Node 18 or newer (I used the built-in test runner and `fetch`).
 src/
   server.js             the HTTP server and routes
   notes.js              reading and writing data/notes.json
+  validate.js           input rules, shared by the server and the API routes
   event-loop-demo.js    prints callback order so you can see the loop
+api/
+  _lib/github.js        GitHub-file-storage helper for the serverless routes
+  notes/index.js        GET/POST /api/notes on Vercel
+  notes/[id].js         GET/PUT/DELETE /api/notes/:id on Vercel
 public/                 the web page (html, css, js)
 data/notes.json         where the notes are saved
-test/notes.test.js      tests for the API
+test/notes.test.js      end-to-end tests for the API
+test/validate.test.js   unit tests for the validation rules
 NOTES.md                my notes on the event loop, modules, streams, events
 ```
 
@@ -55,6 +70,57 @@ curl -X POST http://localhost:3000/api/notes \
   -d "{\"title\":\"Hello\",\"body\":\"my first note\"}"
 ```
 
+Every error comes back in the same shape, so the frontend only needs one code
+path to display it:
+
+```json
+{
+  "error": "Could not save the note",
+  "details": ["title cannot be empty or only spaces"]
+}
+```
+
+## Edge cases the server handles
+
+| Situation | Response |
+| --- | --- |
+| Missing / empty / whitespace-only title | `400` with the reason in `details` |
+| Title over 100 chars, body over 2000 chars | `400` |
+| `title` sent as a number, object or array | `400` |
+| Malformed JSON, or an empty body | `400` |
+| Body is a JSON array instead of an object | `400` |
+| `Content-Type` isn't `application/json` | `415` |
+| Body larger than 10 KB | `413` — the rest is drained, never buffered |
+| `PUT` with no fields, or with an invalid field | `400` |
+| `PUT`/`DELETE` on an id that doesn't exist | `404` |
+| Malformed id (`/api/notes/abc`) or an extra segment | `404`, without touching the disk |
+| `PATCH /api/notes` | `405` with an `Allow` header |
+| Unknown `/api/...` path | `404` as JSON, not an HTML page |
+| `GET /../package.json` | `403` — path traversal can't escape `public/` |
+| Malformed `%` escape or a NUL byte in the URL | `400` |
+| `data/notes.json` is corrupt, empty, or not an array | Warns and starts from an empty list instead of 500-ing every request |
+| Two notes created in the same millisecond | Writes are serialised, so ids stay unique and neither write is lost |
+| Crash partway through a write | Writes go to a temp file and are renamed into place, so the file is never left truncated |
+| Port 3000 already in use | Clear message telling you to set `PORT` |
+
+## What the user sees
+
+Nothing happens silently — every action gets an explicit response:
+
+- **Validation** runs in the browser before the request and again on the
+  server, with live character counters on both fields.
+- **Saving** disables the form and changes the button to "Saving…", so a
+  double-click can't create the same note twice.
+- **Success** shows a green confirmation naming the note (`Added "Groceries".`)
+  that clears itself after a few seconds.
+- **Delete** asks first, naming the note, and says so if you cancel.
+- **Failures** keep what you typed and say so, and list the server's `details`
+  rather than a generic "failed".
+- **No backend** (the GitHub Pages build) shows a banner explaining that notes
+  are stored in this browser only — so nobody thinks their data reached a server.
+- The feedback area is a `role="status"` live region, so screen readers
+  announce all of it too.
+
 ## What I learned
 
 The write-up is in [NOTES.md](NOTES.md) - the event loop and its phases,
@@ -71,27 +137,37 @@ Short version of where each module shows up:
 
 ## Deployment
 
-This project serves a static frontend from the `public/` folder. Two quick ways to get a live, reviewable site:
+Both deployments run automatically on push to `main` — see the [live demo](#live-demo)
+links at the top.
 
-- **GitHub Pages (auto)**: a GitHub Action is included at `.github/workflows/deploy-gh-pages.yml` that publishes the `public/` folder to GitHub Pages on push to `main` or `master`. After you push, check the Actions tab — once successful, enable Pages in the repo settings (or set Pages to use the `gh-pages` branch) and the site will be live.
+### Vercel — frontend + working API
 
-- **Vercel (one-click)**: import the repository at https://vercel.com/new and set the `Build & Output Settings` so the output directory is `public` (no build command required). Vercel will host the static site immediately.
+Import the repo at https://vercel.com/new. No build command and no output
+directory to set: Vercel serves `public/` at the root and turns each file under
+`api/` into a serverless function on its own.
 
-- **Vercel (frontend + backend)**: This repo now includes serverless API routes under `api/notes` that proxy to Supabase for persistence. To deploy a working full-stack site on Vercel:
- - **Vercel (frontend + backend without extra accounts)**: If you don't want additional services, the server includes GitHub-backed serverless API routes under `api/notes` that read/write `data/notes.json` directly in this repository using the GitHub REST API.
+The API stores notes by committing `data/notes.json` back to this repository
+through the GitHub REST API, so there's no database to sign up for. It needs one
+environment variable in **Settings → Environment Variables**:
 
-  To enable this on Vercel you only need:
+- `GH_PAT` — a GitHub personal access token with `repo` scope
+  ([create one here](https://github.com/settings/tokens))
 
-  1. A GitHub Personal Access Token (PAT) with `repo` scope. Create one at https://github.com/settings/tokens and copy it.
-  2. In your Vercel project settings add an Environment Variable:
-    - `GH_PAT` = your GitHub PAT
+Vercel already exposes the repo owner and name via `VERCEL_GIT_REPO_OWNER` and
+`VERCEL_GIT_REPO_SLUG`, so the functions work that out themselves. Set
+`GITHUB_REPO` to `owner/repo` only if that detection doesn't fit your setup.
 
-  Vercel provides the repository owner and name via `VERCEL_GIT_REPO_OWNER` and `VERCEL_GIT_REPO_SLUG`; the functions will infer the repo automatically. If needed, you can also set `GITHUB_REPO` to `owner/repo`.
+Redeploy after adding the token. Without it, `/api/notes` answers `500` with
+`"Server not configured"` and the page drops into demo mode.
 
-  After adding `GH_PAT`, redeploy the project. The serverless API will be available at `/api/notes` and will persist changes by committing `data/notes.json` to this repository.
+Caveat: every write is a git commit. That's fine for a demo, not for real
+write volume.
 
-  Notes and caveats:
-  - This method creates a git commit for each write. It is simple and requires no extra services, but it's not ideal for high write volumes.
-  - If you prefer a more robust backend (Postgres or Supabase), see the previous instructions in this README.
+### GitHub Pages — frontend only
 
-Notes for reviewers: the frontend now includes a demo/offline fallback. If the backend API (`/api/notes`) is not reachable on the deployed site, the app automatically switches to a demo mode that stores notes in the browser (`localStorage`) so the UI remains interactive.
+`.github/workflows/deploy-gh-pages.yml` publishes `public/` on every push.
+Enable it once under **Settings → Pages → Source: GitHub Actions**.
+
+Pages can only serve static files, so there's no API there. The page detects
+that, shows a banner saying so, and stores notes in `localStorage` instead —
+the UI stays fully interactive for anyone who just wants to click through it.

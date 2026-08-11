@@ -1,105 +1,76 @@
-// Vercel serverless function to list/create notes using the repository's data/notes.json
-// Stores and reads notes.json directly in the GitHub repo using a Personal Access Token.
-// Environment variables expected on Vercel:
-// - GH_PAT : GitHub personal access token with repo access
-// - GITHUB_REPO (optional) : owner/repo. If not provided, Vercel env VERCEL_GIT_REPO_OWNER and VERCEL_GIT_REPO_SLUG are used.
+// Vercel serverless function: list (GET) and create (POST) notes.
+// Storage is data/notes.json in this repo, read/written through the GitHub API.
+// See api/_lib/github.js for the required environment variables.
 
-const path = require('path');
-
-const GH_PAT = process.env.GH_PAT;
-const REPO = process.env.GITHUB_REPO || (process.env.VERCEL_GIT_REPO_OWNER && process.env.VERCEL_GIT_REPO_SLUG && `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}`);
-const BRANCH = process.env.GIT_BRANCH || 'main';
-const FILE_PATH = 'data/notes.json';
-
-if (!GH_PAT) console.warn('GH_PAT not set — /api/notes will fail on Vercel');
-if (!REPO) console.warn('GITHUB_REPO not set — repo owner/slug may be unavailable');
-
-async function githubRequest(method, apiPath, body) {
-  const url = `https://api.github.com${apiPath}`;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `token ${GH_PAT}`,
-      'User-Agent': 'notes-app',
-      Accept: 'application/vnd.github.v3+json',
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = text; }
-  return { status: res.status, data };
-}
-
-async function getFile() {
-  const apiPath = `/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`;
-  return githubRequest('GET', apiPath);
-}
-
-async function updateFile(contentBase64, sha, message) {
-  const apiPath = `/repos/${REPO}/contents/${FILE_PATH}`;
-  return githubRequest('PUT', apiPath, {
-    message,
-    content: contentBase64,
-    sha,
-    branch: BRANCH,
-  });
-}
-
-function encodeBase64(str) { return Buffer.from(str, 'utf8').toString('base64'); }
-function decodeBase64(str) { return Buffer.from(str, 'base64').toString('utf8'); }
+const gh = require('../_lib/github');
+const { validateNote } = require('../../src/validate');
 
 module.exports = async (req, res) => {
-  if (!GH_PAT || !REPO) {
-    return res.status(500).json({ error: 'Server not configured: GH_PAT or GITHUB_REPO missing' });
+  if (!gh.isConfigured()) {
+    return gh.sendError(res, 500, 'Server not configured', [
+      'Set GH_PAT (and GITHUB_REPO if the repo cannot be detected) in the Vercel project settings.',
+    ]);
   }
 
   try {
     if (req.method === 'GET') {
-      const r = await getFile();
-      if (r.status === 200 && r.data && r.data.content) {
-        const content = decodeBase64(r.data.content.replace(/\n/g, ''));
-        const notes = JSON.parse(content || '[]');
-        return res.status(200).json(notes);
+      const read = await gh.readNotes();
+      if (!read.ok) {
+        return gh.sendError(res, 502, 'Could not read notes from storage', [
+          `GitHub responded with ${read.status}`,
+        ]);
       }
-      // if file not found, return empty list
-      if (r.status === 404) return res.status(200).json([]);
-      return res.status(500).json({ error: 'Failed to read notes file', details: r.data });
+      return res.status(200).json(read.notes);
     }
 
     if (req.method === 'POST') {
-      const body = await new Promise((resolve, reject) => {
-        let d=''; req.on('data', c => d+=c); req.on('end', () => resolve(JSON.parse(d))).on('error', reject);
-      });
-      if (!body.title || typeof body.title !== 'string') return res.status(400).json({ error: 'title is required' });
-
-      // load current file
-      const r = await getFile();
-      let notes = [];
-      let sha = undefined;
-      if (r.status === 200 && r.data && r.data.content) {
-        sha = r.data.sha;
-        const content = decodeBase64(r.data.content.replace(/\n/g, ''));
-        notes = JSON.parse(content || '[]');
+      const parsed = gh.parseBody(req);
+      if (!parsed.ok) {
+        return gh.sendError(res, 400, 'Invalid request body', parsed.errors);
       }
 
-      const id = Date.now().toString();
-      const note = { id, title: body.title, body: body.body || '', createdAt: new Date().toISOString() };
-      notes.push(note);
+      const check = validateNote(parsed.data);
+      if (!check.ok) {
+        return gh.sendError(res, 400, 'Could not save the note', check.errors);
+      }
 
-      const newContent = JSON.stringify(notes, null, 2);
-      const upd = await updateFile(encodeBase64(newContent), sha, `Add note ${id}`);
+      const read = await gh.readNotes();
+      if (!read.ok) {
+        return gh.sendError(res, 502, 'Could not read notes from storage', [
+          `GitHub responded with ${read.status}`,
+        ]);
+      }
+
+      const note = {
+        id: gh.nextId(read.notes),
+        title: check.value.title,
+        body: check.value.body,
+        createdAt: new Date().toISOString(),
+      };
+
+      const notes = read.notes.concat(note);
+      const upd = await gh.writeNotes(notes, read.sha, `Add note ${note.id}`);
+
       if (upd.status >= 200 && upd.status < 300) {
         return res.status(201).json(note);
       }
-      return res.status(500).json({ error: 'Failed to update notes file', details: upd.data });
+
+      // 409 means someone else wrote the file between our read and our write.
+      if (upd.status === 409) {
+        return gh.sendError(res, 409, 'Someone else just changed the notes', [
+          'Please refresh and try again.',
+        ]);
+      }
+
+      return gh.sendError(res, 502, 'Could not save the note to storage', [
+        `GitHub responded with ${upd.status}`,
+      ]);
     }
 
-    res.setHeader('Allow', 'GET,POST');
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.setHeader('Allow', 'GET, POST');
+    return gh.sendError(res, 405, 'Method not allowed. Try: GET, POST');
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Server error' });
+    return gh.sendError(res, 500, 'Server error — please try again');
   }
 };

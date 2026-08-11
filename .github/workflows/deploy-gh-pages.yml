@@ -1,28 +1,44 @@
 name: Deploy to GitHub Pages
 
+# Publishes the static frontend in public/ so the app can be tried live.
+# There is no Node backend on Pages, so the page runs in its own demo mode
+# (notes are stored in the browser). The full API is deployed on Vercel.
+
 on:
   push:
     branches: [ main, master ]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    concurrency:
-      group: 'pages'
-      cancel-in-progress: true
+
+    # deploy-pages needs this environment to publish and to report the URL.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Upload public/ to Pages artifact
-        uses: actions/upload-pages-artifact@v1
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload public/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
 
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v1
+        id: deployment
+        uses: actions/deploy-pages@v4

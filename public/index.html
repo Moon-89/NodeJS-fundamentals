@@ -4,22 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Notes</title>
-  <link rel="stylesheet" href="/style.css">
+  <!-- Relative, not "/style.css": GitHub Pages serves this project from a
+       subpath (/NodeJS-fundamentals/), where an absolute path would 404. -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <h1>My Notes</h1>
   <p class="sub">A Node.js server with no Express</p>
 
-  <form id="note-form">
-    <input type="text" id="title" placeholder="Title" required>
-    <textarea id="body" placeholder="Write something..." rows="3"></textarea>
-    <button type="submit">Add note</button>
+  <!-- Shown when the API isn't reachable (e.g. the static-only GitHub Pages
+       build) so the user always knows where their data is actually going. -->
+  <div id="mode-banner" class="banner" role="status" hidden></div>
+
+  <form id="note-form" novalidate>
+    <label class="field-label" for="title">Title <span aria-hidden="true">*</span></label>
+    <input type="text" id="title" name="title" placeholder="Title" maxlength="100"
+           autocomplete="off" aria-describedby="title-help title-count" required>
+    <div class="field-row">
+      <span id="title-help" class="field-help">Required</span>
+      <span id="title-count" class="counter">0 / 100</span>
+    </div>
+
+    <label class="field-label" for="body">Note</label>
+    <textarea id="body" name="body" placeholder="Write something..." rows="3"
+              maxlength="2000" aria-describedby="body-count"></textarea>
+    <div class="field-row">
+      <span class="field-help">Optional</span>
+      <span id="body-count" class="counter">0 / 2000</span>
+    </div>
+
+    <button type="submit" id="submit-btn">Add note</button>
   </form>
 
-  <div id="message"></div>
+  <!-- role=status + aria-live so screen readers announce every confirmation
+       and error, not just sighted users. -->
+  <div id="message" role="status" aria-live="polite"></div>
 
-  <div id="notes">Loading...</div>
+  <div id="notes" aria-busy="true">Loading notes…</div>
 
-  <script src="/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

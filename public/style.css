@@ -25,16 +25,48 @@ form {
   margin-bottom: 20px;
 }
 
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #333;
+}
+
 input,
 textarea {
   width: 100%;
   padding: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 4px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-family: inherit;
   font-size: 14px;
   box-sizing: border-box;
+}
+
+input:disabled,
+textarea:disabled {
+  background: #f0f0f0;
+  color: #888;
+}
+
+/* Helper text on the left, character counter on the right. */
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.field-help,
+.counter {
+  font-size: 12px;
+  color: #888;
+}
+
+.counter-full {
+  color: #c0392b;
+  font-weight: bold;
 }
 
 button {
@@ -51,6 +83,22 @@ button:hover {
   background: #246337;
 }
 
+button:disabled {
+  background: #9bbda7;
+  cursor: not-allowed;
+}
+
+/* Tells the user their notes are only in this browser, not on a server. */
+.banner {
+  background: #fff8e1;
+  border: 1px solid #ffe0a3;
+  border-radius: 5px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #7a5b00;
+}
+
 .note {
   background: #fff;
   border: 1px solid #ddd;
@@ -62,6 +110,7 @@ button:hover {
 .note h3 {
   margin: 0 0 6px 0;
   font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 .note p {
@@ -69,6 +118,7 @@ button:hover {
   font-size: 14px;
   color: #444;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .note .date {
@@ -86,10 +136,54 @@ button:hover {
   float: right;
 }
 
+.delete:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+.delete:disabled {
+  background: none;
+  color: #d9a29b;
+}
+
+/* One feedback area, three states — every action lands in here. */
 #message {
   margin-bottom: 12px;
   font-size: 14px;
-  color: #c0392b;
+  border-radius: 4px;
+}
+
+#message:not(:empty) {
+  padding: 10px 12px;
+}
+
+#message.error {
+  background: #fdecea;
+  border: 1px solid #f5c6c2;
+  color: #a5281b;
+}
+
+#message.success {
+  background: #e9f6ed;
+  border: 1px solid #b7dfc4;
+  color: #1e6b35;
+}
+
+#message.info {
+  background: #eef3f8;
+  border: 1px solid #cddced;
+  color: #33526f;
+}
+
+#message ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+}
+
+.count {
+  font-size: 12px;
+  color: #888;
+  margin: 0 0 8px 0;
 }
 
 .empty {
