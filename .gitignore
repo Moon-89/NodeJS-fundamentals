@@ -5,3 +5,6 @@ Thumbs.db
 .vscode/
 .idea/
 .env
+
+.vercel
+.env*.local

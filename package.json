@@ -2,7 +2,7 @@
   "name": "notes-server",
   "version": "1.0.0",
   "description": "A notes app built with only Node's built-in modules (no Express)",
-  "main": "src/server.js",
+  "private": true,
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",

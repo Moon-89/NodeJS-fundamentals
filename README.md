@@ -142,9 +142,22 @@ links at the top.
 
 ### Vercel — frontend + working API
 
-Import the repo at https://vercel.com/new. No build command and no output
-directory to set: Vercel serves `public/` at the root and turns each file under
-`api/` into a serverless function on its own.
+Import the repo at https://vercel.com/new. `vercel.json` already pins the two
+settings that matter:
+
+```json
+{ "framework": null, "outputDirectory": "public", "cleanUrls": true }
+```
+
+`outputDirectory` is doing real work here. Without it, Vercel spots
+`src/server.js`, decides the whole repo is one Node server, and builds a single
+function — ignoring `public/` and `api/` completely. That function then calls
+`server.listen()` and never answers the request, so every URL hangs until it
+times out. Declaring the output directory keeps Vercel on the normal path:
+`public/` served as static files, each file under `api/` as its own function.
+
+(`package.json` has no `"main"` for the same reason — it was a second hint
+pointing Vercel at `src/server.js`.)
 
 The API stores notes by committing `data/notes.json` back to this repository
 through the GitHub REST API, so there's no database to sign up for. It needs one
@@ -153,9 +166,9 @@ environment variable in **Settings → Environment Variables**:
 - `GH_PAT` — a GitHub personal access token with `repo` scope
   ([create one here](https://github.com/settings/tokens))
 
-Vercel already exposes the repo owner and name via `VERCEL_GIT_REPO_OWNER` and
-`VERCEL_GIT_REPO_SLUG`, so the functions work that out themselves. Set
-`GITHUB_REPO` to `owner/repo` only if that detection doesn't fit your setup.
+`GITHUB_REPO` (`owner/repo`) is also set, so the functions don't have to rely on
+Vercel's git detection — that's only populated on git-triggered builds, not on
+`vercel --prod` from a terminal.
 
 Redeploy after adding the token. Without it, `/api/notes` answers `500` with
 `"Server not configured"` and the page drops into demo mode.
